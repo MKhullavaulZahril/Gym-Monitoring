@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -48,7 +49,7 @@ class _ScanFieldState extends State<ScanField> {
         onSubmitted: submit,
         decoration: InputDecoration(
           labelText: widget.label,
-          helperText: 'Kolom harus aktif saat scan (tap kolom ini bila perlu)',
+          helperText: 'Scan bisa dari menu mana saja. Kolom ini untuk cari / ketik manual.',
           prefixIcon: const Icon(Icons.qr_code_scanner),
           border: const OutlineInputBorder(),
           suffixIcon: IconButton(
@@ -196,3 +197,107 @@ Future<void> tampilError(BuildContext c, String judul, String pesan) => showDial
         actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
       ),
     );
+
+/// Mendengarkan scanner USB (HID/keyboard) di seluruh layar.
+/// Deretan karakter yang masuk sangat cepat lalu diakhiri Enter dianggap hasil scan,
+/// sehingga kartu bisa di-scan tanpa membuka menu tertentu atau menyorot kolom apa pun.
+/// Pengetikan biasa tidak terpengaruh: jika sebuah kolom teks sedang aktif, scan
+/// dibiarkan masuk ke kolom itu.
+class ScanListener extends StatefulWidget {
+  final Widget child;
+  final ValueChanged<String> onScan;
+  const ScanListener({super.key, required this.child, required this.onScan});
+  @override
+  State<ScanListener> createState() => _ScanListenerState();
+}
+
+class _ScanListenerState extends State<ScanListener> {
+  final _buf = StringBuffer();
+  Duration? _last;
+  Timer? _idle;
+  static const _gap = Duration(milliseconds: 60); // jeda antar karakter scanner < 60 ms
+  static const _minLen = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    _idle?.cancel();
+    super.dispose();
+  }
+
+  void _reset() {
+    _buf.clear();
+    _last = null;
+    _idle?.cancel();
+  }
+
+  bool _editing() {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    return ctx.widget is EditableText || ctx.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  void _fire(String code) {
+    if (mounted) widget.onScan(code);
+  }
+
+  bool _onKey(KeyEvent e) {
+    if (e is! KeyDownEvent || !mounted) return false;
+    // Abaikan jika ada dialog di atas, atau sedang mengetik di kolom teks.
+    if (ModalRoute.of(context)?.isCurrent != true || _editing()) {
+      _reset();
+      return false;
+    }
+    final ts = e.timeStamp;
+    if (_last != null && ts - _last! > _gap) _buf.clear();
+    _last = ts;
+
+    if (e.logicalKey == LogicalKeyboardKey.enter || e.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      final code = _buf.toString().trim();
+      _reset();
+      if (code.length >= _minLen) {
+        _fire(code);
+        return true; // Enter dari scanner tidak boleh menekan tombol yang sedang fokus
+      }
+      return false;
+    }
+
+    final ch = e.character;
+    if (ch == null || ch.length != 1 || ch.codeUnitAt(0) < 32) return false;
+    final lanjut = _buf.isNotEmpty; // karakter ke-2 dst. dalam satu rentetan
+    _buf.write(ch);
+    // Cadangan untuk scanner yang tidak mengirim Enter.
+    _idle?.cancel();
+    _idle = Timer(const Duration(milliseconds: 150), () {
+      final code = _buf.toString().trim();
+      _reset();
+      if (code.length >= _minLen + 1) _fire(code);
+    });
+    return lanjut;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// Pilihan kategori harga: Umum / Pelajar.
+class KategoriSelector extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+  const KategoriSelector({super.key, required this.value, required this.onChanged});
+  @override
+  Widget build(BuildContext context) => SegmentedButton<String>(
+        segments: const [
+          ButtonSegment(value: 'umum', label: Text('Umum'), icon: Icon(Icons.person)),
+          ButtonSegment(value: 'pelajar', label: Text('Pelajar'), icon: Icon(Icons.school)),
+        ],
+        selected: {value},
+        onSelectionChanged: (s) => onChanged(s.first),
+      );
+}

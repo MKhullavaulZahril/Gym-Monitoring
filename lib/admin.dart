@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'kartu.dart';
 import 'widgets.dart';
 
 class AdminHome extends StatefulWidget {
@@ -11,23 +12,56 @@ class AdminHome extends StatefulWidget {
 
 class _AdminHomeState extends State<AdminHome> {
   int i = 0;
+  String? scan; // hasil scan terakhir yang belum diproses halaman tujuan
+  int seq = 0;
+
+  /// Dipanggil saat kartu di-scan dari menu mana pun.
+  /// Di tab Daftar: nomor masuk ke form pendaftaran. Selain itu: pindah ke Cek Member.
+  void onScan(String code) {
+    setState(() {
+      if (i != 2) i = 1;
+      scan = code;
+      seq++;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final pages = [const HarianPage(), const CekPage(), const DaftarPage()];
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Admin • ${widget.p.nama}'),
-        actions: const [AccountMenu()],
+    final pages = [
+      const HarianPage(),
+      CekPage(
+        scan: scan,
+        seq: seq,
+        onDaftar: (code) => setState(() {
+          i = 2;
+          scan = code;
+          seq++;
+        }),
       ),
-      body: Padding(padding: const EdgeInsets.all(16), child: pages[i]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: i,
-        onDestinationSelected: (v) => setState(() => i = v),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.today), label: 'Harian'),
-          NavigationDestination(icon: Icon(Icons.badge), label: 'Cek Member'),
-          NavigationDestination(icon: Icon(Icons.person_add), label: 'Daftar'),
-        ],
+      DaftarPage(scan: scan, seq: seq),
+      const KartuPage(),
+    ];
+    return ScanListener(
+      onScan: onScan,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Admin • ${widget.p.nama}'),
+          actions: const [AccountMenu()],
+        ),
+        body: Padding(padding: const EdgeInsets.all(16), child: pages[i]),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: i,
+          onDestinationSelected: (v) => setState(() {
+            i = v;
+            scan = null;
+          }),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.today), label: 'Harian'),
+            NavigationDestination(icon: Icon(Icons.badge), label: 'Cek Member'),
+            NavigationDestination(icon: Icon(Icons.person_add), label: 'Daftar'),
+            NavigationDestination(icon: Icon(Icons.credit_card), label: 'Kartu'),
+          ],
+        ),
       ),
     );
   }
@@ -43,7 +77,9 @@ class HarianPage extends StatefulWidget {
 class _HarianPageState extends State<HarianPage> {
   final nama = TextEditingController();
   String tipe = tipeBayar.first;
-  int? harga;
+  String kategori = 'umum';
+  Map<String, dynamic>? sett;
+  int? get harga => sett == null ? null : hargaHarian(sett!, kategori);
   String? err;
   List<Map<String, dynamic>> riwayat = [];
   bool busy = false;
@@ -66,7 +102,7 @@ class _HarianPageState extends State<HarianPage> {
       final r = await Api.kunjunganHariIni();
       if (!mounted) return;
       setState(() {
-        harga = s['harga_harian'];
+        sett = s;
         riwayat = r;
         err = null;
       });
@@ -78,8 +114,9 @@ class _HarianPageState extends State<HarianPage> {
   Future<void> simpan() async {
     setState(() => busy = true);
     try {
-      final h = await Api.catatKunjungan(nama.text.trim(), tipe);
+      final h = await Api.catatKunjungan(nama.text.trim(), tipe, kategori);
       nama.clear();
+      FocusManager.instance.primaryFocus?.unfocus();
       if (mounted) toast(context, 'Tersimpan: ${rupiah.format(h)} ($tipe)');
       await muat();
     } catch (e) {
@@ -118,11 +155,14 @@ class _HarianPageState extends State<HarianPage> {
             trailing: TextButton(onPressed: muat, child: const Text('Coba lagi')),
           ),
         ),
-      Text('Harga harian', style: t.titleMedium),
+      KategoriSelector(value: kategori, onChanged: (v) => setState(() => kategori = v)),
+      const SizedBox(height: 12),
+      Text('Harga harian ${labelKategori(kategori)}', style: t.titleMedium),
       Text(harga == null ? '-' : rupiah.format(harga), style: t.headlineMedium),
       const SizedBox(height: 16),
       TextField(
           controller: nama,
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           decoration: const InputDecoration(
               labelText: 'Nama pelanggan (opsional)', border: OutlineInputBorder())),
       const SizedBox(height: 12),
@@ -147,7 +187,7 @@ class _HarianPageState extends State<HarianPage> {
             title: Text('${r['nama_pelanggan'] ?? 'Pelanggan'} • ${rupiah.format(r['harga'])}',
                 style: gaya),
             subtitle: Text(
-                '${r['tipe_pembayaran']} • ${fJam.format(DateTime.parse(r['waktu']).toLocal())}'
+                '${labelKategori(r['kategori'])} • ${r['tipe_pembayaran']} • ${fJam.format(DateTime.parse(r['waktu']).toLocal())}'
                 '${batalOk ? ' • DIBATALKAN' : ''}'),
             trailing: batalOk
                 ? null
@@ -164,7 +204,10 @@ class _HarianPageState extends State<HarianPage> {
 
 // ---------- Cek member (scan / cari) ----------
 class CekPage extends StatefulWidget {
-  const CekPage({super.key});
+  final String? scan; // kode hasil scan dari menu lain
+  final int seq;
+  final ValueChanged<String>? onDaftar; // pindah ke tab Daftar dengan nomor ini
+  const CekPage({super.key, this.scan, this.seq = 0, this.onDaftar});
   @override
   State<CekPage> createState() => _CekPageState();
 }
@@ -173,7 +216,28 @@ class _CekPageState extends State<CekPage> {
   Map<String, dynamic>? m;
   List<Map<String, dynamic>> hasil = [];
   String? err;
+  String? tidakAda; // nomor yang tidak ditemukan
   bool loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cariDariScan();
+  }
+
+  @override
+  void didUpdateWidget(CekPage old) {
+    super.didUpdateWidget(old);
+    if (widget.seq != old.seq) _cariDariScan();
+  }
+
+  void _cariDariScan() {
+    final code = widget.scan;
+    if (code == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) cari(code);
+    });
+  }
 
   Future<void> cari(String q) async {
     setState(() {
@@ -185,10 +249,12 @@ class _CekPageState extends State<CekPage> {
       if (!mounted) return;
       setState(() {
         loading = false;
+        tidakAda = null;
         if (r.isEmpty) {
           m = null;
           hasil = [];
           err = 'Member "$q" tidak ditemukan';
+          tidakAda = q;
         } else if (r.length == 1 || '${r.first['no_member']}'.toLowerCase() == q.toLowerCase()) {
           m = r.first;
           hasil = [];
@@ -212,13 +278,16 @@ class _CekPageState extends State<CekPage> {
       final s = await Api.settings();
       if (!mounted) return;
       String tipe = tipeBayar.first;
+      String kat = '${m!['kategori'] ?? 'umum'}';
       final ok = await showDialog<bool>(
         context: context,
         builder: (_) => StatefulBuilder(
           builder: (ctx, set) => AlertDialog(
             title: const Text('Perpanjang member'),
             content: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('${rupiah.format(s['harga_member'])} • ${s['durasi_member_hari']} hari'),
+              KategoriSelector(value: kat, onChanged: (v) => set(() => kat = v)),
+              const SizedBox(height: 12),
+              Text('${rupiah.format(hargaMember(s, kat))} • ${s['durasi_member_hari']} hari'),
               const SizedBox(height: 12),
               PayDropdown(value: tipe, onChanged: (v) => set(() => tipe = v)),
             ]),
@@ -230,7 +299,7 @@ class _CekPageState extends State<CekPage> {
         ),
       );
       if (ok != true) return;
-      await Api.perpanjangMember(m!['id'], tipe);
+      await Api.perpanjangMember(m!['id'], tipe, kat);
       await cari('${m!['no_member']}');
       if (mounted) toast(context, 'Membership diperpanjang');
     } catch (e) {
@@ -297,6 +366,7 @@ class _CekPageState extends State<CekPage> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${m!['nama']}', style: t.headlineSmall),
           Text('No. member: ${m!['no_member']}'),
+          Text('Kategori: ${labelKategori(m!['kategori'])}'),
           if (m!['no_hp'] != null) Text('HP: ${m!['no_hp']}'),
           if (m!['alamat'] != null) Text('Alamat: ${m!['alamat']}'),
           const Divider(height: 24),
@@ -324,6 +394,15 @@ class _CekPageState extends State<CekPage> {
       const SizedBox(height: 16),
       if (loading) const LinearProgressIndicator(),
       if (err != null) Text(err!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+      if (tidakAda != null && widget.onDaftar != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: FilledButton.icon(
+            onPressed: () => widget.onDaftar!(tidakAda!),
+            icon: const Icon(Icons.person_add),
+            label: Text('Daftarkan "$tidakAda" sebagai member baru'),
+          ),
+        ),
       ...hasil.map((r) => Card(
             child: ListTile(
               title: Text('${r['nama']}'),
@@ -341,7 +420,9 @@ class _CekPageState extends State<CekPage> {
 
 // ---------- Daftar member baru ----------
 class DaftarPage extends StatefulWidget {
-  const DaftarPage({super.key});
+  final String? scan; // kode hasil scan saat tab Daftar sedang terbuka
+  final int seq;
+  const DaftarPage({super.key, this.scan, this.seq = 0});
   @override
   State<DaftarPage> createState() => _DaftarPageState();
 }
@@ -350,6 +431,7 @@ class _DaftarPageState extends State<DaftarPage> {
   final no = TextEditingController(), nama = TextEditingController();
   final hp = TextEditingController(), alamat = TextEditingController();
   String tipe = tipeBayar.first;
+  String kategori = 'umum';
   Map<String, dynamic>? s;
   String? err;
   bool busy = false;
@@ -358,6 +440,13 @@ class _DaftarPageState extends State<DaftarPage> {
   void initState() {
     super.initState();
     muat();
+    if (widget.scan != null) no.text = widget.scan!;
+  }
+
+  @override
+  void didUpdateWidget(DaftarPage old) {
+    super.didUpdateWidget(old);
+    if (widget.scan != null && widget.seq != old.seq) no.text = widget.scan!;
   }
 
   @override
@@ -391,7 +480,7 @@ class _DaftarPageState extends State<DaftarPage> {
     try {
       final h = await Api.daftarMember(
         no: no.text.trim(), nama: nama.text.trim(), hp: hp.text.trim(),
-        alamat: alamat.text.trim(), tipe: tipe,
+        alamat: alamat.text.trim(), tipe: tipe, kategori: kategori,
       );
       for (final c in [no, nama, hp, alamat]) {
         c.clear();
@@ -427,10 +516,12 @@ class _DaftarPageState extends State<DaftarPage> {
               TextButton(onPressed: muat, child: const Text('Coba lagi')),
             ]),
           ),
+        KategoriSelector(value: kategori, onChanged: (v) => setState(() => kategori = v)),
+        const SizedBox(height: 12),
         if (s != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text('Paket: ${rupiah.format(s!['harga_member'])} • ${s!['durasi_member_hari']} hari'),
+            child: Text('Paket ${labelKategori(kategori)}: ${rupiah.format(hargaMember(s!, kategori))} • ${s!['durasi_member_hari']} hari'),
           ),
         PayDropdown(value: tipe, onChanged: (v) => setState(() => tipe = v)),
         const SizedBox(height: 16),

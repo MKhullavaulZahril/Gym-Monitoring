@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
+import 'kartu.dart';
 import 'staff.dart';
 import 'widgets.dart';
 
@@ -15,7 +16,7 @@ class _SuperHomeState extends State<SuperHome> {
   int i = 0;
   @override
   Widget build(BuildContext context) {
-    const pages = [DashboardPage(), RekapPage(), StaffPage(), DataPage()];
+    const pages = [DashboardPage(), RekapPage(), StaffPage(), KartuPage(), DataPage()];
     return Scaffold(
       appBar: AppBar(
         title: Text('Super Admin • ${widget.p.nama}'),
@@ -29,6 +30,7 @@ class _SuperHomeState extends State<SuperHome> {
           NavigationDestination(icon: Icon(Icons.dashboard), label: 'Dashboard'),
           NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Rekap'),
           NavigationDestination(icon: Icon(Icons.manage_accounts), label: 'Akun'),
+          NavigationDestination(icon: Icon(Icons.credit_card), label: 'Kartu'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'Data'),
         ],
       ),
@@ -225,6 +227,7 @@ class DataPage extends StatefulWidget {
 
 class _DataPageState extends State<DataPage> {
   final hh = TextEditingController(), hm = TextEditingController();
+  final hhp = TextEditingController(), hmp = TextEditingController();
   final dur = TextEditingController(), ret = TextEditingController();
   int? old;
   DateTime? batas;
@@ -239,6 +242,8 @@ class _DataPageState extends State<DataPage> {
       if (!mounted) return;
       hh.text = '${s['harga_harian']}';
       hm.text = '${s['harga_member']}';
+      hhp.text = '${s['harga_harian_pelajar']}';
+      hmp.text = '${s['harga_member_pelajar']}';
       dur.text = '${s['durasi_member_hari']}';
       ret.text = '${s['retensi_bulan']}';
     }).catchError((Object e) {
@@ -248,7 +253,7 @@ class _DataPageState extends State<DataPage> {
 
   @override
   void dispose() {
-    for (final c in [hh, hm, dur, ret]) {
+    for (final c in [hh, hm, hhp, hmp, dur, ret]) {
       c.dispose();
     }
     super.dispose();
@@ -257,14 +262,16 @@ class _DataPageState extends State<DataPage> {
   int? n(TextEditingController c) => int.tryParse(c.text.trim());
 
   Future<void> simpan() async {
-    final a = n(hh), b = n(hm), d = n(dur), r = n(ret);
-    if (a == null || b == null || d == null || r == null || a < 0 || b < 0 || d < 1 || r < 1) {
+    final a = n(hh), b = n(hm), p = n(hhp), q = n(hmp), d = n(dur), r = n(ret);
+    if (a == null || b == null || p == null || q == null || d == null || r == null ||
+        a < 0 || b < 0 || p < 0 || q < 0 || d < 1 || r < 1) {
       toast(context, 'Isi semua angka dengan benar (durasi dan retensi minimal 1)');
       return;
     }
     try {
       await Api.saveSettings({
-        'harga_harian': a, 'harga_member': b, 'durasi_member_hari': d, 'retensi_bulan': r,
+        'harga_harian': a, 'harga_member': b, 'harga_harian_pelajar': p, 'harga_member_pelajar': q,
+        'durasi_member_hari': d, 'retensi_bulan': r,
       });
       if (mounted) toast(context, 'Pengaturan disimpan');
     } catch (e) {
@@ -350,8 +357,10 @@ class _DataPageState extends State<DataPage> {
       if (err != null) Text(err!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
       Text('Harga & paket', style: t.titleMedium),
       const SizedBox(height: 8),
-      f(hh, 'Harga harian (Rp)'),
-      f(hm, 'Harga member (Rp)'),
+      f(hh, 'Harga harian UMUM (Rp)'),
+      f(hhp, 'Harga harian PELAJAR (Rp)'),
+      f(hm, 'Harga member UMUM (Rp)'),
+      f(hmp, 'Harga member PELAJAR (Rp)'),
       f(dur, 'Durasi member (hari)'),
       f(ret, 'Simpan data kunjungan (bulan)'),
       FilledButton(onPressed: simpan, child: const Text('Simpan pengaturan')),

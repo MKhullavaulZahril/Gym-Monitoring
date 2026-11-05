@@ -9,6 +9,12 @@ final fTanggal = DateFormat('dd MMM yyyy', 'id_ID');
 final fBulan = DateFormat('MMMM yyyy', 'id_ID');
 final fJam = DateFormat('HH:mm');
 const tipeBayar = ['Tunai', 'Transfer', 'QRIS'];
+const kategoriList = ['umum', 'pelajar'];
+String labelKategori(Object? k) => k == 'pelajar' ? 'Pelajar' : 'Umum';
+int hargaHarian(Map<String, dynamic> s, String k) =>
+    (k == 'pelajar' ? s['harga_harian_pelajar'] : s['harga_harian']) as int;
+int hargaMember(Map<String, dynamic> s, String k) =>
+    (k == 'pelajar' ? s['harga_member_pelajar'] : s['harga_member']) as int;
 
 void toast(BuildContext c, String m) => ScaffoldMessenger.of(c)
   ..hideCurrentSnackBar()
@@ -29,7 +35,7 @@ String errMsg(Object e) {
     if (e.code == 'PGRST202' || e.code == '42883') {
       return 'Fungsi di database belum terpasang. Jalankan file SQL terbaru di Supabase SQL Editor (lihat README).';
     }
-    if (e.code == '42703') {
+    if (e.code == '42703' || e.code == 'PGRST204') {
       return 'Struktur database belum diperbarui. Jalankan fix_roles.sql lalu akun.sql di Supabase. (${e.message})';
     }
     return e.message;
@@ -86,8 +92,9 @@ class Api {
   }
 
   // ---------- Pelanggan harian (harga ditentukan server) ----------
-  static Future<int> catatKunjungan(String nama, String tipe) async =>
-      (await db.rpc('catat_kunjungan', params: {'p_nama': nama, 'p_tipe': tipe})) as int;
+  static Future<int> catatKunjungan(String nama, String tipe, String kategori) async =>
+      (await db.rpc('catat_kunjungan',
+          params: {'p_nama': nama, 'p_tipe': tipe, 'p_kategori': kategori})) as int;
 
   static Future<List<Map<String, dynamic>>> kunjunganHariIni() async =>
       _rows(await db.rpc('kunjungan_saya_hari_ini'));
@@ -101,14 +108,17 @@ class Api {
       _rows(await db.rpc('cek_member', params: {'p_q': q}));
 
   static Future<int> daftarMember({
-    required String no, required String nama, String? hp, String? alamat, required String tipe,
+    required String no, required String nama, String? hp, String? alamat,
+    required String tipe, required String kategori,
   }) async =>
       (await db.rpc('daftar_member', params: {
-        'p_no': no, 'p_nama': nama, 'p_hp': hp, 'p_alamat': alamat, 'p_tipe': tipe,
+        'p_no': no, 'p_nama': nama, 'p_hp': hp, 'p_alamat': alamat,
+        'p_tipe': tipe, 'p_kategori': kategori,
       })) as int;
 
-  static Future<int> perpanjangMember(String memberId, String tipe) async =>
-      (await db.rpc('perpanjang_member', params: {'p_member_id': memberId, 'p_tipe': tipe})) as int;
+  static Future<int> perpanjangMember(String memberId, String tipe, String kategori) async =>
+      (await db.rpc('perpanjang_member',
+          params: {'p_member_id': memberId, 'p_tipe': tipe, 'p_kategori': kategori})) as int;
 
   static Future<void> ubahMember({
     required String id, required String no, required String nama, String? hp, String? alamat,
@@ -117,6 +127,13 @@ class Api {
       'p_id': id, 'p_no': no, 'p_nama': nama, 'p_hp': hp, 'p_alamat': alamat,
     });
   }
+
+  // ---------- Kartu member ----------
+  static Future<List<String>> buatNomorKartu(String prefix, int jumlah) async => List<String>.from(
+      (await db.rpc('buat_nomor_kartu', params: {'p_prefix': prefix, 'p_jumlah': jumlah})) as List);
+
+  static Future<List<Map<String, dynamic>>> riwayatKartu() async =>
+      _rows(await db.rpc('riwayat_kartu', params: {'p_limit': 50}));
 
   // ---------- Laporan ----------
   static Future<List<dynamic>> stats(DateTime d) async {
@@ -152,12 +169,12 @@ class Api {
   /// CSV seluruh kunjungan yang akan dihapus (diambil per 1000 baris).
   static Future<String> csvDataLama(int bulan) async {
     final cutoff = (await db.rpc('purge_cutoff', params: {'p_bulan': bulan})) as String;
-    final sb = StringBuffer('waktu,nama_pelanggan,harga,tipe_pembayaran,admin,dibatalkan\n');
+    final sb = StringBuffer('waktu,nama_pelanggan,kategori,harga,tipe_pembayaran,admin,dibatalkan\n');
     var from = 0;
     while (true) {
       final rows = _rows(await db
           .from('daily_visits')
-          .select('created_at,nama_pelanggan,harga,tipe_pembayaran,batal,profiles(nama)')
+          .select('created_at,nama_pelanggan,kategori,harga,tipe_pembayaran,batal,profiles(nama)')
           .lt('created_at', cutoff)
           .order('created_at')
           .order('id')
@@ -165,7 +182,7 @@ class Api {
       for (final r in rows) {
         final waktu = DateTime.parse(r['created_at']).toLocal().toString().substring(0, 19);
         sb.writeln([
-          waktu, r['nama_pelanggan'], r['harga'], r['tipe_pembayaran'],
+          waktu, r['nama_pelanggan'], r['kategori'], r['harga'], r['tipe_pembayaran'],
           (r['profiles'] as Map?)?['nama'], r['batal'],
         ].map(_csv).join(','));
       }
