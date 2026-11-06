@@ -1,11 +1,12 @@
+import 'dart:typed_data';
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'api.dart';
+import 'kartu_aset.dart';
 import 'kartu_config.dart';
 import 'widgets.dart';
 
@@ -13,8 +14,7 @@ import 'widgets.dart';
 // MODEL 2D KARTU MEMBER (FLUTTER UI PREVIEW)
 // =====================================================================
 
-/// SISI DEPAN: desain dari assets/kartu/Depan.png + ID Member + QR 2D
-/// Tidak ada kotak warna di atas desain — teks/QR transparan di atas gambar
+/// SISI DEPAN: desain dari assets/kartu/Depan.png + (hanya) ID Member + QR 2D
 class KartuDepan extends StatelessWidget {
   final String nomor;
   final String nama;
@@ -38,59 +38,57 @@ class KartuDepan extends StatelessWidget {
       child: LayoutBuilder(builder: (context, c) {
         final w = c.maxWidth;
         final h = c.maxHeight;
+        final qrSisi = w * kKartuQrSisi;
 
         return ClipRRect(
           borderRadius: BorderRadius.circular(w * 0.038),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // ── Background: gambar desain penuh ──
-              Image.asset(
-                kKartuTemplateDepan,
-                fit: BoxFit.fill,
-                errorBuilder: (_, __, ___) => Container(
-                  color: const Color(0xFF101116),
-                  alignment: Alignment.center,
-                  child: const Text('Depan.png tidak ditemukan\ndi assets/kartu/',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.amber, fontSize: 11)),
-                ),
-              ),
-
-              // ── Overlay: ID Member (teks langsung di atas gambar) ──
+              const KartuLatar(path: kKartuTemplateDepan, depan: true),
+              // ID Member (teks contoh di desain sudah dihapus, jadi tidak perlu penutup)
               Positioned(
                 left: w * kKartuIdLeft,
-                top: h * kKartuIdTop,
-                width: w * kKartuIdWidth,
-                height: h * kKartuIdHeight,
+                top: h * (kKartuIdTengahY - kKartuIdTinggi / 2),
+                width: w * kKartuIdLebar,
+                height: h * kKartuIdTinggi,
                 child: FittedBox(
-                  fit: BoxFit.contain,
+                  fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     nomor,
                     maxLines: 1,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: kKartuIdWarna,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.0,
+                      fontSize: h * kKartuIdFont,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: w * 0.002,
                       height: 1,
                     ),
                   ),
                 ),
               ),
-
-              // ── Overlay: QR Code (transparan bg) ──
+              // QR 2D: kotak terang berisi modul gelap (paling mudah dibaca scanner)
               Positioned(
-                left: w * kKartuQrLeft,
-                top: h * kKartuQrTop,
-                width: w * kKartuQrWidth,
-                height: h * kKartuQrHeight,
-                child: BarcodeWidget(
-                  barcode: Barcode.qrCode(),
-                  data: nomor,
-                  color: kKartuQrWarna,
-                  backgroundColor: kKartuQrLatar,
-                  padding: EdgeInsets.all(w * 0.004),
+                left: w * kKartuQrTengahX - qrSisi / 2,
+                top: h * kKartuQrTengahY - qrSisi / 2,
+                width: qrSisi,
+                height: qrSisi,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: kKartuQrLatar,
+                    borderRadius: BorderRadius.circular(qrSisi * 0.07),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(qrSisi * 0.09),
+                    child: BarcodeWidget(
+                      barcode: Barcode.qrCode(),
+                      data: nomor,
+                      color: kKartuQrWarna,
+                      backgroundColor: kKartuQrLatar,
+                      drawText: false,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -101,7 +99,7 @@ class KartuDepan extends StatelessWidget {
   }
 }
 
-/// SISI BELAKANG: desain dari assets/kartu/Belakang.png — tanpa overlay apapun
+/// SISI BELAKANG: desain dari assets/kartu/Belakang.png tanpa overlay
 class KartuBelakang extends StatelessWidget {
   final String nomor;
   final String nama;
@@ -122,17 +120,7 @@ class KartuBelakang extends StatelessWidget {
         final w = c.maxWidth;
         return ClipRRect(
           borderRadius: BorderRadius.circular(w * 0.038),
-          child: Image.asset(
-            kKartuTemplateBelakang,
-            fit: BoxFit.fill,
-            errorBuilder: (_, __, ___) => Container(
-              color: const Color(0xFF101116),
-              alignment: Alignment.center,
-              child: const Text('Belakang.png tidak ditemukan\ndi assets/kartu/',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.amber, fontSize: 11)),
-            ),
-          ),
+          child: const KartuLatar(path: kKartuTemplateBelakang),
         );
       }),
     );
@@ -141,7 +129,7 @@ class KartuBelakang extends StatelessWidget {
 
 typedef KartuMember = KartuMemberInteraktif;
 
-/// Widget Kartu Interaktif: tap untuk balik sisi depan ↔ belakang
+/// Widget Kartu Interaktif untuk Layar: Bisa beralih Tampak Depan & Belakang
 class KartuMemberInteraktif extends StatefulWidget {
   final String nomor;
   final String nama;
@@ -171,8 +159,7 @@ class _KartuMemberInteraktifState extends State<KartuMemberInteraktif> {
           children: [
             Row(
               children: [
-                Icon(depan ? Icons.credit_card : Icons.flip_to_back,
-                    size: 18, color: const Color(0xFFD4AF37)),
+                Icon(depan ? Icons.credit_card : Icons.flip_to_back, size: 18, color: const Color(0xFFD4AF37)),
                 const SizedBox(width: 6),
                 Text(
                   depan ? 'Tampak Depan (Sisi Depan)' : 'Tampak Belakang (Sisi Belakang)',
@@ -205,59 +192,48 @@ class _KartuMemberInteraktifState extends State<KartuMemberInteraktif> {
 }
 
 // =====================================================================
-// GENERATOR PDF VECTOR (MURNI DART — ANTI CRASH, TAJAM, SIAP CETAK)
+// GENERATOR PDF VECTOR RESMI (MURNI DART - ANTI CRASH & 100% TAJAM)
 // =====================================================================
 
 class KartuPdfEngine {
-  /// Ukuran fisik kartu PVC CR80 (85.60 mm × 53.98 mm)
+  /// Ukuran fisik pas kartu PVC CR80 (85.60 mm x 53.98 mm)
   static final cardFormat = PdfPageFormat(
     85.60 * PdfPageFormat.mm,
     53.98 * PdfPageFormat.mm,
     marginAll: 0,
   );
 
-  /// Muat gambar dari assets; kembalikan null kalau gagal
-  static Future<pw.MemoryImage?> muatGambar(String path) async {
-    try {
-      final data = await rootBundle.load(path);
-      return pw.MemoryImage(data.buffer.asUint8List());
-    } catch (_) {
-      return null;
-    }
+  /// Memakai gambar yang sudah diproses (dipotong, rasio CR80) agar ringan dan pas.
+  static Future<pw.MemoryImage?> _loadAsset(String path, {bool depan = false}) async {
+    final g = await KartuAset.muat(path, bersihkanId: depan);
+    return g == null ? null : pw.MemoryImage(g.png);
   }
 
-  /// Bangun dokumen PDF — setiap nomor kartu = 2 halaman (depan + belakang)
-  /// Terima gambar yang sudah di-load agar tidak freeze saat tombol ditekan
-  static Future<pw.Document> buatDokumen(
-    List<String> daftarNomor, {
-    pw.MemoryImage? bgDepan,
-    pw.MemoryImage? bgBelakang,
-  }) async {
+  /// Bangun dokumen PDF lengkap berisi semua kartu yang dipilih
+  static Future<pw.Document> buatDokumen(List<String> daftarNomor) async {
     final pdf = pw.Document(title: 'Kartu Member $kNamaGym');
-
-    // Fallback: muat di sini jika belum di-preload
-    final imgDepan = bgDepan ?? await muatGambar(kKartuTemplateDepan);
-    final imgBelakang = bgBelakang ?? await muatGambar(kKartuTemplateBelakang);
+    final bgDepan = await _loadAsset(kKartuTemplateDepan, depan: true);
+    final bgBelakang = await _loadAsset(kKartuTemplateBelakang);
 
     for (final no in daftarNomor) {
-      // ── Halaman Depan ──
+      // Halaman Depan
       pdf.addPage(
         pw.Page(
           pageFormat: cardFormat,
           build: (ctx) => pw.FullPage(
             ignoreMargins: true,
-            child: _pdfDepan(no, imgDepan),
+            child: _pdfDepan(no, bgDepan),
           ),
         ),
       );
 
-      // ── Halaman Belakang ──
+      // Halaman Belakang
       pdf.addPage(
         pw.Page(
           pageFormat: cardFormat,
           build: (ctx) => pw.FullPage(
             ignoreMargins: true,
-            child: _pdfBelakang(imgBelakang),
+            child: _pdfBelakang(bgBelakang),
           ),
         ),
       );
@@ -266,76 +242,73 @@ class KartuPdfEngine {
     return pdf;
   }
 
-  /// Halaman depan PDF: gambar desain + ID Member + QR Code
+  /// Sisi depan PDF: desain + (hanya) ID Member + QR 2D
   static pw.Widget _pdfDepan(String nomor, pw.MemoryImage? bgImage) {
     const pageW = 85.60 * PdfPageFormat.mm;
     const pageH = 53.98 * PdfPageFormat.mm;
+    const qrSisi = pageW * kKartuQrSisi;
 
-    // Warna untuk overlay (sama dengan konstanta di kartu_config.dart)
-    const idWarna = PdfColor.fromInt(0xFFFBBF24);  // emas
-    const qrWarna = PdfColor.fromInt(0xFFFBBF24);  // emas
-    const qrLatar = PdfColor.fromInt(0xFF151410);  // hitam gelap (biar kontras)
-
-    return pw.Stack(
-      children: [
-        // ── Background: gambar desain penuh ──
-        if (bgImage != null)
-          pw.Positioned.fill(
-            child: pw.Image(bgImage, fit: pw.BoxFit.fill),
-          )
-        else
-          pw.Positioned.fill(
-            child: pw.Container(color: const PdfColor.fromInt(0xFF101116)),
-          ),
-
-        // ── Overlay: ID Member (teks emas langsung di atas gambar) ──
-        // pw.Positioned tidak punya width/height → pakai SizedBox di dalam child
-        pw.Positioned(
-          left: pageW * kKartuIdLeft,
-          top: pageH * kKartuIdTop,
-          child: pw.SizedBox(
-            width: pageW * kKartuIdWidth,
-            height: pageH * kKartuIdHeight,
-            child: pw.FittedBox(
-              fit: pw.BoxFit.contain,
-              alignment: pw.Alignment.centerLeft,
-              child: pw.Text(
-                nomor,
-                maxLines: 1,
-                style: pw.TextStyle(
-                  color: idWarna,
-                  fontWeight: pw.FontWeight.bold,
-                  letterSpacing: 0.8,
+    return pw.Container(
+      width: pageW,
+      height: pageH,
+      color: const PdfColor.fromInt(0xFF101116),
+      child: pw.Stack(
+        children: [
+          if (bgImage != null)
+            pw.Positioned(
+              left: 0,
+              top: 0,
+              right: 0,
+              bottom: 0,
+              child: pw.Image(bgImage, fit: pw.BoxFit.fill),
+            ),
+          pw.Positioned(
+            left: pageW * kKartuIdLeft,
+            top: pageH * (kKartuIdTengahY - kKartuIdTinggi / 2),
+            child: pw.SizedBox(
+              width: pageW * kKartuIdLebar,
+              height: pageH * kKartuIdTinggi,
+              child: pw.FittedBox(
+                fit: pw.BoxFit.scaleDown,
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  nomor,
+                  maxLines: 1,
+                  style: pw.TextStyle(
+                    color: const PdfColor.fromInt(0xFFFBBF24),
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: pageH * kKartuIdFont,
+                    letterSpacing: pageW * 0.002,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-
-        // ── Overlay: QR Code 2D (latar hitam agar bisa dibaca scanner) ──
-        pw.Positioned(
-          left: pageW * kKartuQrLeft,
-          top: pageH * kKartuQrTop,
-          child: pw.SizedBox(
-            width: pageW * kKartuQrWidth,
-            height: pageH * kKartuQrHeight,
+          pw.Positioned(
+            left: pageW * kKartuQrTengahX - qrSisi / 2,
+            top: pageH * kKartuQrTengahY - qrSisi / 2,
             child: pw.Container(
-              color: qrLatar,
-              padding: const pw.EdgeInsets.all(1.5),
+              width: qrSisi,
+              height: qrSisi,
+              decoration: pw.BoxDecoration(
+                color: PdfColors.white,
+                borderRadius: pw.BorderRadius.all(pw.Radius.circular(qrSisi * 0.07)),
+              ),
+              padding: pw.EdgeInsets.all(qrSisi * 0.09),
               child: pw.BarcodeWidget(
                 barcode: pw.Barcode.qrCode(),
                 data: nomor,
-                color: qrWarna,
-                backgroundColor: qrLatar,
+                color: PdfColors.black,
+                drawText: false,
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  /// Halaman belakang PDF: gambar desain utuh, tanpa overlay apapun
+  /// Sisi belakang PDF: desain utuh tanpa overlay
   static pw.Widget _pdfBelakang(pw.MemoryImage? bgImage) {
     const pageW = 85.60 * PdfPageFormat.mm;
     const pageH = 53.98 * PdfPageFormat.mm;
@@ -351,7 +324,7 @@ class KartuPdfEngine {
 }
 
 // =====================================================================
-// MENU HALAMAN KARTU (GENERATE ID, EXPORT PDF, SHARING)
+// MENU HALAMAN KARTU (GENERASI ID, EXPORT PDF OTOMATIS & SHARING)
 // =====================================================================
 
 class KartuPage extends StatefulWidget {
@@ -369,32 +342,11 @@ class _KartuPageState extends State<KartuPage> {
   bool busy = false;
   String? riwayatErr;
 
-  // Gambar desain di-preload saat halaman dibuka agar export tidak freeze
-  pw.MemoryImage? _imgDepan;
-  pw.MemoryImage? _imgBelakang;
-  bool _gambarSiap = false;
-
   @override
   void initState() {
     super.initState();
     muatRiwayat();
-    _preloadGambar();
-    muatRiwayat();
   }
-
-  /// Load gambar desain di background saat halaman pertama dibuka
-  Future<void> _preloadGambar() async {
-    final d = await KartuPdfEngine.muatGambar(kKartuTemplateDepan);
-    final b = await KartuPdfEngine.muatGambar(kKartuTemplateBelakang);
-    if (mounted) {
-      setState(() {
-        _imgDepan = d;
-        _imgBelakang = b;
-        _gambarSiap = true;
-      });
-    }
-  }
-
 
   @override
   void dispose() {
@@ -419,17 +371,19 @@ class _KartuPageState extends State<KartuPage> {
   }
 
   void setDaftarNomor(List<String> daftar) {
-    setState(() => nomor = daftar);
+    setState(() {
+      nomor = daftar;
+    });
     if (ctrl.hasClients) {
       ctrl.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     }
   }
 
-  /// Buat nomor kartu baru di database
+  /// Eksekusi buat nomor baru di database
   Future<void> buat() async {
     final n = int.tryParse(jumlah.text.trim());
-    if (n == null || n < 1 || n > 50) {
-      toast(context, 'Jumlah kartu 1 sampai 50');
+    if (n == null || n < 1 || n > 30) {
+      toast(context, 'Jumlah kartu 1 sampai 30');
       return;
     }
     setState(() => busy = true);
@@ -440,7 +394,7 @@ class _KartuPageState extends State<KartuPage> {
       await muatRiwayat();
       if (mounted) {
         toast(context, '${hasil.length} kartu berhasil dibuat!');
-        // Otomatis tampilkan dialog export PDF setelah selesai
+        // Otomatis munculkan opsi Export PDF & Cetak setelah selesai
         _tampilDialogSelesai(hasil);
       }
     } catch (e) {
@@ -482,7 +436,7 @@ class _KartuPageState extends State<KartuPage> {
             ),
             const SizedBox(height: 14),
             const Text(
-              'PDF vector standar fisik CR80 (85.6 × 54 mm), siap cetak di printer kartu PVC atau kertas stiker.',
+              'Format PDF dibuat murni vector standar fisik CR80 (85.6 x 54 mm) siap cetak di printer kartu PVC atau kertas stiker.',
               style: TextStyle(fontSize: 12),
             ),
           ],
@@ -505,82 +459,34 @@ class _KartuPageState extends State<KartuPage> {
     );
   }
 
-  /// Export ke PDF — 2 halaman per kartu (depan + belakang), siap cetak
+  /// Export kartu ke PDF resmi standar ISO CR80 (85.6 mm x 54 mm) murni vector
   Future<void> exportPdf(List<String> daftar) async {
     if (daftar.isEmpty) return;
     setState(() => busy = true);
-
-    // Tampilkan dialog loading agar app tidak terlihat freeze
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          content: Row(
-            children: const [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Expanded(child: Text('Menyiapkan PDF...\nMohon tunggu, gambar sedang diproses.')),
-            ],
-          ),
-        ),
-      ),
-    );
-
     try {
-      final doc = await KartuPdfEngine.buatDokumen(
-        daftar,
-        bgDepan: _imgDepan,
-        bgBelakang: _imgBelakang,
-      );
+      final doc = await KartuPdfEngine.buatDokumen(daftar);
       final bytes = await doc.save();
       final filename = 'Kartu_Member_${daftar.first}.pdf';
 
-      if (mounted) Navigator.of(context, rootNavigator: true).pop(); // tutup loading
-
-      // Tampilkan print dialog / download PDF di Chrome
+      // Langsung munculkan print preview bawaan OS / Chrome
       await Printing.layoutPdf(
         name: filename,
         onLayout: (PdfPageFormat format) async => bytes,
       );
     } catch (e) {
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
       if (mounted) await tampilError(context, 'Gagal membuat file PDF', errMsg(e));
     }
     if (mounted) setState(() => busy = false);
   }
 
-  /// Simpan/bagikan PNG (Depan & Belakang) resolusi 300 DPI — untuk Word/desain
+  /// Simpan/bagikan gambar PNG (Depan & Belakang) via PDF Raster (300 DPI - pas untuk Word)
   Future<void> simpanPngWord(String no) async {
     setState(() => busy = true);
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          content: Row(
-            children: const [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Expanded(child: Text('Menyiapkan gambar PNG 300 DPI...\nMohon tunggu.')),
-            ],
-          ),
-        ),
-      ),
-    );
-
     try {
-      final doc = await KartuPdfEngine.buatDokumen(
-        [no],
-        bgDepan: _imgDepan,
-        bgBelakang: _imgBelakang,
-      );
+      final doc = await KartuPdfEngine.buatDokumen([no]);
       final pdfBytes = await doc.save();
 
-      // Render halaman PDF ke PNG 300 DPI
+      // Render halaman PDF ke PNG resolusi 300 DPI
       final files = <XFile>[];
       var idx = 0;
       await for (final page in Printing.raster(pdfBytes, dpi: 300)) {
@@ -590,13 +496,10 @@ class _KartuPageState extends State<KartuPage> {
         idx++;
       }
 
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-
       await SharePlus.instance.share(
-        ShareParams(files: files, text: 'Kartu Member $no (Depan & Belakang — 300 DPI)'),
+        ShareParams(files: files, text: 'Kartu Member $no (Depan & Belakang - 300 DPI)'),
       );
     } catch (e) {
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
       if (mounted) await tampilError(context, 'Gagal membagikan gambar PNG', errMsg(e));
     }
     if (mounted) setState(() => busy = false);
@@ -612,26 +515,13 @@ class _KartuPageState extends State<KartuPage> {
         Text('Buat Kartu Member (CR80)', style: t.titleLarge),
         const SizedBox(height: 4),
         const Text(
-          'Format ID terstruktur (misal: BM-2026-0001). Dilengkapi QR Code 2D untuk Turnstile Gate. '
-          'Kartu menampilkan desain asli dari assets/kartu/ — ID Member & QR di-overlay otomatis.',
+          'Format ID terstruktur (misal: BM-2026-0001). Dilengkapi QR Code untuk Turnstile Gate '
+          'dan Barcode Code 128 untuk Scanner USB OM200. Hasil otomatis bisa diexport ke PDF berstandar cetak.',
           style: TextStyle(fontSize: 12),
         ),
-
-        // Indikator loading gambar desain
-        if (!_gambarSiap)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              children: [
-                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-                SizedBox(width: 10),
-                Text('Memuat desain kartu...', style: TextStyle(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
-          ),
         const SizedBox(height: 14),
 
-        // ── Input Prefiks & Jumlah ──
+        // Input Prefiks & Jumlah
         Row(
           children: [
             Expanded(
@@ -643,7 +533,7 @@ class _KartuPageState extends State<KartuPage> {
                 decoration: const InputDecoration(
                   labelText: 'Kode / Awalan (Prefix)',
                   hintText: 'BM atau GYM',
-                  helperText: 'Contoh hasil: BM-2026-0001',
+                  helperText: 'Akan menjadi: BM-2026-0001',
                   border: OutlineInputBorder(),
                   counterText: '',
                 ),
@@ -656,8 +546,8 @@ class _KartuPageState extends State<KartuPage> {
                 keyboardType: TextInputType.number,
                 onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 decoration: const InputDecoration(
-                  labelText: 'Jumlah kartu (1–50)',
-                  helperText: 'Nomor urut otomatis',
+                  labelText: 'Jumlah kartu (1-30)',
+                  helperText: 'Buat nomor berurutan',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -672,7 +562,7 @@ class _KartuPageState extends State<KartuPage> {
           label: Text(busy ? 'Memproses...' : 'Buat Nomor & Generate Kartu'),
         ),
 
-        // ── Tampilan Kartu Hasil Generate ──
+        // Tampilan Kartu Hasil Generate
         if (nomor.isNotEmpty) ...[
           const SizedBox(height: 20),
           Row(
@@ -686,7 +576,7 @@ class _KartuPageState extends State<KartuPage> {
               FilledButton.tonalIcon(
                 onPressed: busy ? null : () => exportPdf(nomor),
                 icon: const Icon(Icons.picture_as_pdf),
-                label: const Text('Export Semua (PDF)'),
+                label: const Text('Export / Cetak Semua (PDF)'),
               ),
             ],
           ),
@@ -700,7 +590,7 @@ class _KartuPageState extends State<KartuPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Preview kartu interaktif
+                    // Kartu Interaktif (Preview di layar)
                     KartuMemberInteraktif(nomor: nomor[i]),
                     const SizedBox(height: 12),
                     Row(
@@ -728,7 +618,7 @@ class _KartuPageState extends State<KartuPage> {
 
         const Divider(height: 40),
 
-        // ── Riwayat Kartu ──
+        // Riwayat Kartu yang pernah dibuat
         Row(
           children: [
             Expanded(child: Text('Riwayat Nomor Kartu', style: t.titleMedium)),
