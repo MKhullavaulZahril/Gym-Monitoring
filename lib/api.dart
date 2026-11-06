@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'config.dart';
 
 final db = Supabase.instance.client;
 final rupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -210,13 +211,44 @@ class Api {
     await db.rpc('reset_staff_password', params: {'p_id': id, 'p_password': password});
   }
 
-  /// Buat akun login baru lewat database. true = akun baru dibuat,
-  /// false = email sudah punya akun (hanya role/nama yang diatur).
+  /// Buat akun login baru. true = akun baru dibuat,
+  /// false = email sudah punya akun (hanya nama/role yang diatur).
+  /// Cara 1: fungsi database. Jika gagal karena kendala teknis, Cara 2: pendaftaran biasa lalu atur role.
   static Future<bool> createStaff({
     required String email, required String password,
     required String nama, required String role,
-  }) async =>
-      (await db.rpc('buat_akun_staff', params: {
+  }) async {
+    String? gagal1;
+    try {
+      return (await db.rpc('buat_akun_staff', params: {
         'p_email': email, 'p_password': password, 'p_nama': nama, 'p_role': role,
       })) as bool;
+    } on PostgrestException catch (e) {
+      // Pesan aturan dari fungsi (mis. email tidak valid, bukan Super Admin) ditampilkan apa adanya.
+      if (e.code == 'P0001') throw e.message;
+      gagal1 = '${e.message} (kode ${e.code ?? '-'})';
+    }
+
+    // Cara 2
+    final tmp = SupabaseClient(kSupabaseUrl, kSupabaseKey); // sesi terpisah
+    String? signUpErr;
+    var baru = true;
+    try {
+      final r = await tmp.auth.signUp(email: email, password: password);
+      if (r.user?.identities?.isEmpty ?? false) baru = false;
+    } on AuthException catch (e) {
+      signUpErr = e.message;
+      baru = false;
+    } finally {
+      await tmp.dispose();
+    }
+    try {
+      await db.rpc('set_staff_role', params: {'p_email': email, 'p_nama': nama, 'p_role': role});
+      return baru;
+    } on PostgrestException catch (e) {
+      throw 'Cara 1 gagal: $gagal1\n'
+          'Cara 2 gagal: ${signUpErr ?? e.message}\n'
+          '(Pastikan Sign Up aktif dan Confirm email dimatikan di Supabase, atau buat akun lewat Authentication > Users lalu tekan Tambah lagi dengan email yang sama.)';
+    }
+  }
 }

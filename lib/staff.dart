@@ -13,7 +13,11 @@ class StaffPage extends StatefulWidget {
 
 class _StaffPageState extends State<StaffPage> {
   late Future<List<Map<String, dynamic>>> f = Api.staff();
-  void reload() => setState(() => f = Api.staff());
+  void reload() {
+    setState(() {
+      f = Api.staff();
+    });
+  }
 
   InputDecoration _pwDeco(TextEditingController c, String label, {String? helper}) => InputDecoration(
       labelText: label,

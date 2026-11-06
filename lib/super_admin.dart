@@ -174,14 +174,18 @@ class _RekapPageState extends State<RekapPage> {
     return Column(children: [
       Row(children: [
         Expanded(child: Text('Rekap 12 bulan', style: t.titleLarge)),
-        IconButton(icon: const Icon(Icons.refresh), onPressed: () => setState(() => f = Api.rekap())),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: () => setState(() {
+          f = Api.rekap();
+        })),
       ]),
       Expanded(
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: f,
           builder: (c, s) {
             if (s.hasError) {
-              return ErrorView(msg: errMsg(s.error!), onRetry: () => setState(() => f = Api.rekap()));
+              return ErrorView(msg: errMsg(s.error!), onRetry: () => setState(() {
+                f = Api.rekap();
+              }));
             }
             if (!s.hasData) return const Center(child: CircularProgressIndicator());
             final rows = s.data!;
@@ -336,7 +340,11 @@ class _DataPageState extends State<DataPage> {
       final hapus = await Api.purge(n(ret)!);
       if (mounted) toast(context, '$hapus data dihapus');
       await hitung();
-      if (mounted) setState(() => audit = Api.audit());
+      if (mounted) {
+        setState(() {
+          audit = Api.audit();
+        });
+      }
     } catch (e) {
       if (mounted) toast(context, 'Gagal: ${errMsg(e)}');
     }
