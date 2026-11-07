@@ -44,8 +44,11 @@ class _ScanFieldState extends State<ScanField> {
   Widget build(BuildContext context) => TextField(
         controller: c,
         focusNode: f,
-        autofocus: true,
-        keyboardType: manual ? TextInputType.text : TextInputType.none,
+        autofocus: false,
+       keyboardType: TextInputType.text,
+onTap: () {
+  SystemChannels.textInput.invokeMethod('TextInput.show');
+},
         onSubmitted: submit,
         decoration: InputDecoration(
           labelText: widget.label,
