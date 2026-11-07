@@ -129,6 +129,27 @@ class Api {
     });
   }
 
+  // ---------- Daftar member (Super Admin) ----------
+  static Future<List<Map<String, dynamic>>> listMember({
+    String q = '', String status = 'semua', String kategori = '',
+    bool dihapus = false, int limit = 50, int offset = 0,
+  }) async =>
+      _rows(await db.rpc('list_member', params: {
+        'p_q': q, 'p_status': status, 'p_kategori': kategori,
+        'p_dihapus': dihapus, 'p_limit': limit, 'p_offset': offset,
+      }));
+
+  static Future<List<Map<String, dynamic>>> riwayatMembership(String id) async =>
+      _rows(await db.rpc('riwayat_membership', params: {'p_member_id': id}));
+
+  static Future<void> hapusMember(String id, String alasan) async {
+    await db.rpc('hapus_member', params: {'p_id': id, 'p_alasan': alasan});
+  }
+
+  static Future<void> pulihkanMember(String id) async {
+    await db.rpc('pulihkan_member', params: {'p_id': id});
+  }
+
   // ---------- Kartu member ----------
   static Future<List<String>> buatNomorKartu(String prefix, int jumlah) async => List<String>.from(
       (await db.rpc('buat_nomor_kartu', params: {'p_prefix': prefix, 'p_jumlah': jumlah})) as List);

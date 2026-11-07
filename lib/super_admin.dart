@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api.dart';
 import 'kartu.dart';
+import 'member_list.dart';
 import 'staff.dart';
 import 'widgets.dart';
 
@@ -16,13 +17,14 @@ class _SuperHomeState extends State<SuperHome> {
   int i = 0;
   @override
   Widget build(BuildContext context) {
-    const pages = [DashboardPage(), RekapPage(), StaffPage(), KartuPage(), DataPage()];
+    const pages = [DashboardPage(), RekapPage(), MemberPage(), StaffPage(), KartuPage(), DataPage()];
     return AdaptiveShell(
       title: Text('Super Admin • ${widget.p.nama}'),
       actions: const [AccountMenu()],
       items: const [
         NavItem(Icons.dashboard, 'Dashboard'),
         NavItem(Icons.bar_chart, 'Rekap'),
+        NavItem(Icons.people, 'Member'),
         NavItem(Icons.manage_accounts, 'Akun'),
         NavItem(Icons.credit_card, 'Kartu'),
         NavItem(Icons.settings, 'Data'),

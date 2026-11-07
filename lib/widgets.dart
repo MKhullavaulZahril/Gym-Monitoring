@@ -45,9 +45,9 @@ class _ScanFieldState extends State<ScanField> {
         controller: c,
         focusNode: f,
         autofocus: false,
-       keyboardType: TextInputType.text,
-onTap: () {
-  SystemChannels.textInput.invokeMethod('TextInput.show');
+        keyboardType: TextInputType.text,
+        onTap: () {
+        SystemChannels.textInput.invokeMethod('TextInput.show');
 },
         onSubmitted: submit,
         decoration: InputDecoration(
@@ -376,6 +376,9 @@ class AdaptiveShell extends StatelessWidget {
           : NavigationBar(
               selectedIndex: index,
               onDestinationSelected: onSelect,
+              labelBehavior: items.length > 5
+                  ? NavigationDestinationLabelBehavior.onlyShowSelected
+                  : NavigationDestinationLabelBehavior.alwaysShow,
               destinations: [
                 for (final it in items) NavigationDestination(icon: Icon(it.icon), label: it.label),
               ],
