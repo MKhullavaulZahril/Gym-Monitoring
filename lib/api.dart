@@ -211,6 +211,11 @@ class Api {
     await db.rpc('reset_staff_password', params: {'p_id': id, 'p_password': password});
   }
 
+  /// Hapus akun permanen (hanya jika akun belum punya riwayat data).
+  static Future<void> hapusStaff(String id) async {
+    await db.rpc('hapus_staff', params: {'p_id': id});
+  }
+
   /// Buat akun login baru. true = akun baru dibuat,
   /// false = email sudah punya akun (hanya nama/role yang diatur).
   /// Cara 1: fungsi database. Jika gagal karena kendala teknis, Cara 2: pendaftaran biasa lalu atur role.

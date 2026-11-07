@@ -17,23 +17,21 @@ class _SuperHomeState extends State<SuperHome> {
   @override
   Widget build(BuildContext context) {
     const pages = [DashboardPage(), RekapPage(), StaffPage(), KartuPage(), DataPage()];
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Super Admin • ${widget.p.nama}'),
-        actions: const [AccountMenu()],
-      ),
-      body: Padding(padding: const EdgeInsets.all(16), child: pages[i]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: i,
-        onDestinationSelected: (v) => setState(() => i = v),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Rekap'),
-          NavigationDestination(icon: Icon(Icons.manage_accounts), label: 'Akun'),
-          NavigationDestination(icon: Icon(Icons.credit_card), label: 'Kartu'),
-          NavigationDestination(icon: Icon(Icons.settings), label: 'Data'),
-        ],
-      ),
+    return AdaptiveShell(
+      title: Text('Super Admin • ${widget.p.nama}'),
+      actions: const [AccountMenu()],
+      items: const [
+        NavItem(Icons.dashboard, 'Dashboard'),
+        NavItem(Icons.bar_chart, 'Rekap'),
+        NavItem(Icons.manage_accounts, 'Akun'),
+        NavItem(Icons.credit_card, 'Kartu'),
+        NavItem(Icons.settings, 'Data'),
+      ],
+      index: i,
+      onSelect: (v) => setState(() {
+        i = v;
+      }),
+      body: pages[i],
     );
   }
 }

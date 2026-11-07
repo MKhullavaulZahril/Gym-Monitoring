@@ -301,3 +301,82 @@ class KategoriSelector extends StatelessWidget {
         onSelectionChanged: (s) => onChanged(s.first),
       );
 }
+
+class NavItem {
+  final IconData icon;
+  final String label;
+  const NavItem(this.icon, this.label);
+}
+
+/// Kerangka halaman yang menyesuaikan posisi HP / tablet:
+///  - layar sempit (HP potret)            : menu di bagian bawah,
+///  - layar lebar (HP landscape / tablet) : menu di sisi kiri, isi dibatasi lebar maksimal
+///    agar tidak melar dan ruang tinggi tidak terpakai bilah bawah.
+class AdaptiveShell extends StatelessWidget {
+  final Widget title;
+  final List<Widget> actions;
+  final List<NavItem> items;
+  final int index;
+  final ValueChanged<int> onSelect;
+  final Widget body;
+  const AdaptiveShell({
+    super.key,
+    required this.title,
+    this.actions = const [],
+    required this.items,
+    required this.index,
+    required this.onSelect,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final wide = size.width >= 600;
+    final isi = Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 960),
+        child: Padding(padding: EdgeInsets.all(wide ? 20 : 16), child: body),
+      ),
+    );
+    return Scaffold(
+      appBar: AppBar(title: title, actions: actions),
+      body: wide
+          ? Row(children: [
+              LayoutBuilder(
+                builder: (context, c) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: c.maxHeight),
+                    child: IntrinsicHeight(
+                      child: NavigationRail(
+                        selectedIndex: index,
+                        onDestinationSelected: onSelect,
+                        labelType: size.height < 500
+                            ? NavigationRailLabelType.selected
+                            : NavigationRailLabelType.all,
+                        destinations: [
+                          for (final it in items)
+                            NavigationRailDestination(icon: Icon(it.icon), label: Text(it.label)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(child: isi),
+            ])
+          : isi,
+      bottomNavigationBar: wide
+          ? null
+          : NavigationBar(
+              selectedIndex: index,
+              onDestinationSelected: onSelect,
+              destinations: [
+                for (final it in items) NavigationDestination(icon: Icon(it.icon), label: it.label),
+              ],
+            ),
+    );
+  }
+}

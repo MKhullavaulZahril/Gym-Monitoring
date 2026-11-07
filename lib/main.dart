@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api.dart';
@@ -9,6 +10,8 @@ import 'super_admin.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Boleh potret maupun landscape, mengikuti posisi HP / tablet.
+  await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
   await initializeDateFormatting('id_ID');
   await Supabase.initialize(url: kSupabaseUrl, publishableKey: kSupabaseKey);
   runApp(const App());

@@ -125,6 +125,39 @@ class _StaffPageState extends State<StaffPage> {
     }
   }
 
+  Future<void> hapusAkun(Map<String, dynamic> r) async {
+    final c = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.warning_amber, color: Colors.red),
+        title: const Text('Hapus akun permanen?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${r['nama'] ?? '-'}\n${r['email'] ?? '-'}\n\n'
+              'Akun akan dihapus selamanya dan tidak bisa login lagi. Tindakan ini tidak bisa dibatalkan. '
+              'Ketik HAPUS untuk lanjut.'),
+          TextField(controller: c, decoration: const InputDecoration(hintText: 'HAPUS')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, c.text.trim() == 'HAPUS'),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await Api.hapusStaff(r['id']);
+      if (mounted) toast(context, 'Akun dihapus');
+    } catch (e) {
+      if (mounted) await tampilError(context, 'Akun tidak bisa dihapus', errMsg(e));
+    }
+    reload();
+  }
+
   Future<void> ubahNama(Map<String, dynamic> r) async {
     final c = TextEditingController(text: '${r['nama'] ?? ''}');
     final ok = await showDialog<bool>(
@@ -159,6 +192,8 @@ class _StaffPageState extends State<StaffPage> {
     final isSuper = r['role'] == 'super_admin';
     final aksi = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: SingleChildScrollView(
@@ -192,6 +227,10 @@ class _StaffPageState extends State<StaffPage> {
                   leading: Icon(aktif ? Icons.block : Icons.check_circle),
                   title: Text(aktif ? 'Nonaktifkan akun' : 'Aktifkan akun'),
                   onTap: () => Navigator.pop(ctx, aktif ? 'off' : 'on')),
+              ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text('Hapus akun permanen', style: TextStyle(color: Colors.red)),
+                  onTap: () => Navigator.pop(ctx, 'hapus')),
             ],
           ]),
         ),
@@ -213,6 +252,8 @@ class _StaffPageState extends State<StaffPage> {
         await _update(r, {'aktif': false});
       case 'on':
         await _update(r, {'aktif': true});
+      case 'hapus':
+        await hapusAkun(r);
     }
   }
 

@@ -43,25 +43,21 @@ class _AdminHomeState extends State<AdminHome> {
     ];
     return ScanListener(
       onScan: onScan,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text('Admin • ${widget.p.nama}'),
-          actions: const [AccountMenu()],
-        ),
-        body: Padding(padding: const EdgeInsets.all(16), child: pages[i]),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: i,
-          onDestinationSelected: (v) => setState(() {
-            i = v;
-            scan = null;
-          }),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.today), label: 'Harian'),
-            NavigationDestination(icon: Icon(Icons.badge), label: 'Cek Member'),
-            NavigationDestination(icon: Icon(Icons.person_add), label: 'Daftar'),
-            NavigationDestination(icon: Icon(Icons.credit_card), label: 'Kartu'),
-          ],
-        ),
+      child: AdaptiveShell(
+        title: Text('Admin • ${widget.p.nama}'),
+        actions: const [AccountMenu()],
+        items: const [
+          NavItem(Icons.today, 'Harian'),
+          NavItem(Icons.badge, 'Cek Member'),
+          NavItem(Icons.person_add, 'Daftar'),
+          NavItem(Icons.credit_card, 'Kartu'),
+        ],
+        index: i,
+        onSelect: (v) => setState(() {
+          i = v;
+          scan = null;
+        }),
+        body: pages[i],
       ),
     );
   }
